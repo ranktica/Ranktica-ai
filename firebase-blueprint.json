@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "Standardized collaborative AI creation project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "The unique project identifier string" },
+        "title": { "type": "string", "description": "Video production primary target title" },
+        "niche": { "type": "string", "description": "Target audience content creator niche" },
+        "audience": { "type": "string", "description": "Specific demographic descriptor" },
+        "status": { "type": "string", "description": "Workflow advancement status tag" },
+        "lastUpdated": { "type": "integer", "description": "Latest epoch millisecond timestamp" },
+        "assets": { "type": "object", "description": "Container metadata object for scripts, metadata, and tags" },
+        "team": { "type": "array", "description": "Joint user emails participating in this project" },
+        "ownerId": { "type": "string", "description": "Associated owner Firebase Auth user identifier" },
+        "organizationId": { "type": "string", "description": "Associated optional tenant organization ID" }
+      },
+      "required": ["id", "title", "niche", "status", "lastUpdated"]
+    },
+    "Presence": {
+      "title": "User Presence",
+      "description": "Real-time active project collaborator check-in state",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Unique user email or active key" },
+        "name": { "type": "string", "description": "User visible display name" },
+        "lastActive": { "type": "integer", "description": "Epoch millisecond active ping timestamp" },
+        "activeTool": { "type": "string", "description": "Tool panel currently inside" }
+      },
+      "required": ["userId", "name", "lastActive"]
+    },
+    "VoiceProfile": {
+      "title": "Voice Profile",
+      "description": "Custom recorded or uploaded voice fingerprint with AI tone classification tags",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the voice profile" },
+        "name": { "type": "string", "description": "Human-readable name assigned to the voice profile" },
+        "b64Data": { "type": "string", "description": "Base64 encoded audio fragment data" },
+        "mimeType": { "type": "string", "description": "MIME type format of the reference audio" },
+        "size": { "type": "string", "description": "File capacity size string descriptor" },
+        "tags": { "type": "array", "description": "Descriptive aesthetic classifications like professional or conversational" },
+        "description": { "type": "string", "description": "AI predicted voice timbre summary sentence" },
+        "userId": { "type": "string", "description": "Associated user ID credentials" },
+        "createdAt": { "type": "integer", "description": "Epoch millisecond upload timestamp" }
+      },
+      "required": ["id", "name", "b64Data", "userId", "createdAt"]
+    },
+    "MasteringPreset": {
+      "title": "Mastering Preset",
+      "description": "Custom compression, noise reduction threshold, and peak normalizations settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique identifier of the mastering preset" },
+        "name": { "type": "string", "description": "Human-readable name of the preset" },
+        "noiseReduction": { "type": "boolean" },
+        "noiseReductionThreshold": { "type": "number" },
+        "compress": { "type": "boolean" },
+        "compressorThreshold": { "type": "number" },
+        "compressorRatio": { "type": "number" },
+        "compressorMakeupGain": { "type": "number" },
+        "normalize": { "type": "boolean" },
+        "normalizePeak": { "type": "number" },
+        "userId": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["id", "name", "userId", "createdAt"]
+    },
+    "Notification": {
+      "title": "Notification",
+      "description": "Real-time task and render status alerts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique notification ID" },
+        "userId": { "type": "string", "description": "Associated user email or token identifier" },
+        "title": { "type": "string", "description": "The visual title header of the alert" },
+        "message": { "type": "string", "description": "Short explanation body of the state update" },
+        "type": { "type": "string", "description": "Alert mood type, like success, warning, or info" },
+        "status": { "type": "string", "description": "Notification read status like read or unread" },
+        "tool": { "type": "string", "description": "Associated creator suite tool label" },
+        "createdAt": { "type": "integer", "description": "Epoch millisecond notification creation timestamp" },
+        "link": { "type": "string", "description": "Target suite panel navigation route reference" }
+      },
+      "required": ["id", "userId", "title", "message", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Collaborative project files synchronized across teammates"
+    },
+    "/projects/{projectId}/presence/{userId}": {
+      "schema": "Presence",
+      "description": "Dynamic online user markers with active panel locations"
+    },
+    "/voice_profiles/{profileId}": {
+      "schema": "VoiceProfile",
+      "description": "Custom synthesized voice profiles loaded by creator accounts"
+    },
+    "/mastering_presets/{presetId}": {
+      "schema": "MasteringPreset",
+      "description": "Custom mastering presets defined by creators"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Real-time system actions, renders, and task alert channels"
+    }
+  }
+}

@@ -1,0 +1,124 @@
+name: Ranktica AI V3 Enterprise CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Base Dependencies
+        run: npm ci
+
+      - name: Verify Typescript Compilation
+        run: npm run lint
+
+  automated-testing-suite:
+    needs: lint-and-validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Unit Tests
+        run: npm test -- --coverage
+
+      - name: Run Integration Tests
+        run: npm run test:integration
+
+      - name: Run AI Safety Guardrails Evaluator
+        run: npm run test:ai-eval
+
+  containerize-and-publish:
+    needs: automated-testing-suite
+    runs-on: ubuntu-latest
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/123456789/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'deployer-sa@ranktica-production.iam.gserviceaccount.com'
+
+      - name: Setup GCloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker Credentials
+        run: gcloud auth configure-docker gcr.io
+
+      - name: Build Production Container Image
+        run: |
+          docker build \
+            --build-arg NODE_ENV=production \
+            -t gcr.io/ranktica-production/gateway:${{ github.sha }} \
+            -t gcr.io/ranktica-production/gateway:latest .
+
+      - name: Run Security Scan (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'gcr.io/ranktica-production/gateway:${{ github.sha }}'
+          format: 'table'
+          exit-code: '1'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Push Container to Artifact Registry
+        run: |
+          docker push gcr.io/ranktica-production/gateway:${{ github.sha }}
+          docker push gcr.io/ranktica-production/gateway:latest
+
+  progressive-rollout:
+    needs: containerize-and-publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/123456789/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'deployer-sa@ranktica-production.iam.gserviceaccount.com'
+
+      - name: Deploy Canary Instance (10% Traffic)
+        run: |
+          gcloud run deploy ranktica-gateway-canary \
+            --image gcr.io/ranktica-production/gateway:${{ github.sha }} \
+            --region us-central1 \
+            --no-traffic \
+            --tag canary
+
+      - name: Verify Canary Health SLO Metrics
+        run: |
+          echo "Pinging Canary endpoint health..."
+          curl -f --retry 5 --retry-delay 2 https://canary---ranktica-gateway-canary.run.app/api/health
+
+      - name: Promote Release to 100% Traffic
+        run: |
+          gcloud run services update-traffic ranktica-gateway \
+            --to-revisions=ranktica-gateway-canary=100 \
+            --region us-central1

@@ -1,0 +1,108 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // 1. Global Safety Net: Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Identity and Verification Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
+    }
+
+    function isOrgMember(orgId) {
+      return isSignedIn() && getUserData(request.auth.uid).organizationId == orgId;
+    }
+
+    // Tiered administrative overrides
+    function isOrgAdmin(orgId) {
+      return isSignedIn() && isOrgMember(orgId) && (getUserData(request.auth.uid).role == 'admin' || getUserData(request.auth.uid).role == 'owner');
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/super_admins/$(request.auth.uid));
+    }
+
+    // Multi-tenant organization accounts
+    match /organizations/{orgId} {
+      allow read: if isSignedIn() && (isOrgMember(orgId) || isSuperAdmin());
+      allow write: if isSignedIn() && (isOrgAdmin(orgId) || isSuperAdmin());
+    }
+
+    // Standardized user profiles with strict self-assignment roles defense
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isSuperAdmin());
+      
+      // Forbid setting own role/subscription attributes via SDK to prevent privilege escalation
+      allow create: if isSignedIn() && request.auth.uid == userId 
+        && (!request.resource.data.keys().hasAny(['role', 'subscriptionPlan']) || isSuperAdmin());
+      
+      allow update: if isSignedIn() && request.auth.uid == userId 
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'subscriptionPlan']) || isSuperAdmin());
+    }
+
+    // Projects collection rules with organization & ownership security
+    match /projects/{projectId} {
+      // Create requirement
+      allow create: if isSignedIn() 
+        && request.resource.data.ownerId == request.auth.uid
+        && (request.resource.data.organizationId == null || isOrgMember(request.resource.data.organizationId));
+
+      // Read / Update / Delete
+      allow read: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.organizationId != null && isOrgMember(resource.data.organizationId)) ||
+        isSuperAdmin()
+      );
+
+      allow update: if isSignedIn() && (
+        (resource.data.ownerId == request.auth.uid && request.resource.data.ownerId == request.auth.uid) ||
+        (resource.data.organizationId != null && isOrgAdmin(resource.data.organizationId)) ||
+        isSuperAdmin()
+      );
+
+      allow delete: if isSignedIn() && (
+        resource.data.ownerId == request.auth.uid ||
+        (resource.data.organizationId != null && isOrgAdmin(resource.data.organizationId)) ||
+        isSuperAdmin()
+      );
+
+      // Sub-collection for collaboration presence
+      match /presence/{userId} {
+        allow read: if isSignedIn() && (
+          get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid ||
+          isSuperAdmin()
+        );
+        allow write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    // Voice Profiles matched rules
+    match /voice_profiles/{profileId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isSuperAdmin());
+    }
+
+    // Custom mastering presets rules
+    match /mastering_presets/{presetId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isSuperAdmin());
+    }
+
+    // Real-time system notifications rules
+    match /notifications/{notificationId} {
+      allow create: if isSignedIn();
+      allow read, update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isSuperAdmin());
+    }
+  }
+}

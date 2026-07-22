@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline Dashboard | Ranktica AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-zinc-950 text-zinc-100 min-h-screen font-sans flex flex-col justify-between selection:bg-teal-500/30 selection:text-teal-200">
+  <!-- Top Navigation/Logo Border -->
+  <header class="border-b border-zinc-900/80 bg-zinc-950/50 backdrop-blur px-6 py-4">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="h-8 w-8 rounded-lg bg-gradient-to-tr from-teal-500 to-emerald-600 flex items-center justify-center font-bold text-black text-sm tracking-tighter">
+          R
+        </div>
+        <span class="font-semibold tracking-tight text-zinc-200 text-base">Ranktica AI</span>
+      </div>
+      <div class="flex items-center space-x-2">
+        <span class="relative flex h-2 w-2">
+          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+          <span id="pinger-indicator" class="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+        </span>
+        <span id="connection-status" class="text-xs font-mono text-zinc-400">OFFLINE MODE</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Central Context Visual Workspace -->
+  <main class="flex-grow flex items-center justify-center p-6">
+    <div id="offline-wrapper" class="w-full max-w-md bg-zinc-900/40 border border-zinc-800/80 rounded-2xl p-8 shadow-2xl backdrop-blur relative overflow-hidden transition-all duration-300">
+      
+      <!-- Subtle Decorative Radial Glow -->
+      <div class="absolute -top-24 -left-24 w-48 h-48 bg-teal-500/5 rounded-full blur-3xl pointer-events-none"></div>
+      
+      <!-- Visual Disconnect Symbol -->
+      <div class="flex justify-center mb-6">
+        <div class="h-16 w-16 bg-zinc-900 border border-zinc-800/50 rounded-full flex items-center justify-center text-zinc-400 shadow-inner">
+          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="animate-pulse text-zinc-500">
+            <line x1="1" y1="1" x2="23" y2="23"></line>
+            <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.5"></path>
+            <path d="M5 12.5a10.94 10.94 0 0 1 5.83-2.84"></path>
+            <path d="M12 18.5a4.25 4.25 0 0 1-1-.1"></path>
+            <path d="M13.18 13.18a4.18 4.18 0 0 1 2.22-.72M8.6 8.6a14.79 14.79 0 0 1 11.83-2.1"></path>
+            <path d="M3.57 6.49A14.77 14.77 0 0 1 6.8 5"></path>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Textual Header -->
+      <div class="text-center">
+        <h1 class="text-2xl font-bold tracking-tight text-zinc-100 mb-2 font-sans">Connection Suspended</h1>
+        <p class="text-sm text-zinc-400 leading-relaxed mb-6">
+          Ranktica dashboard is temporarily running offline. Your local queues will sync automatically once an active connection is re-established.
+        </p>
+      </div>
+
+      <!-- Programmatic Metadata Storage Status Panel -->
+      <div class="bg-zinc-950/80 border border-zinc-800/60 rounded-xl p-4 mb-6">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs text-zinc-400 font-medium">LOCAL CACHE METRIC</span>
+          <span class="text-[10px] font-mono bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded text-teal-400">SECURE</span>
+        </div>
+        
+        <div class="space-y-2.5 text-xs">
+          <div class="flex items-center justify-between text-zinc-500">
+            <span>Active Offline Changes:</span>
+            <span id="saved-changes-count" class="font-mono text-zinc-300">0 queued</span>
+          </div>
+          <div class="flex items-center justify-between text-zinc-500">
+            <span>Last Synced Project:</span>
+            <span id="last-project-name" class="font-mono text-zinc-300 text-right truncate max-w-[180px]">Ranktica Hub</span>
+          </div>
+          <div class="flex items-center justify-between text-zinc-500">
+            <span>Sandbox SQLite State:</span>
+            <span class="font-mono text-emerald-400">ACTIVE & INSULATED</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Area -->
+      <div class="space-y-2.5">
+        <button id="retry-action-btn" type="button" class="w-full bg-zinc-100 hover:bg-zinc-200 active:scale-[0.99] text-zinc-950 font-medium text-sm py-2.5 px-4 rounded-xl transition duration-150 flex items-center justify-center space-x-2 shadow-lg shadow-zinc-950/20">
+          <span id="btn-text">Check Connection</span>
+          <svg id="btn-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-zinc-950">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+          </svg>
+        </button>
+        <button onclick="window.history.back()" type="button" class="w-full bg-zinc-900 hover:bg-zinc-800 active:scale-[0.99] text-zinc-300 border border-zinc-800/80 font-medium text-sm py-2.5 px-4 rounded-xl transition duration-150">
+          Go Back
+        </button>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Ground Footer Metadata -->
+  <footer class="border-t border-zinc-900/60 bg-zinc-950/20 py-5 text-center text-xs text-zinc-500 font-mono">
+    <div class="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-2">
+      <span>RANKTICA-AI PWA OPERATIONAL CORE v1.0.0</span>
+      <span class="text-zinc-600">Secure Client-Edge Sandboxing Active</span>
+    </div>
+  </footer>
+
+  <script>
+    // Live Offline Queue Meter Sync
+    function readLocalStorageStats() {
+      try {
+        const changesCountElement = document.getElementById('saved-changes-count');
+        const projectElement = document.getElementById('last-project-name');
+        
+        // Count typical locally persisted queues
+        let totalCount = 0;
+        
+        // Scan standard storage keys for local offline counts
+        const syncQueue = localStorage.getItem('offlineSyncQueue') || localStorage.getItem('projects_sync_queue');
+        if (syncQueue) {
+          try {
+            const parsed = JSON.parse(syncQueue);
+            totalCount = Array.isArray(parsed) ? parsed.length : 0;
+          } catch(e) {}
+        }
+        
+        changesCountElement.textContent = `${totalCount} changes queued`;
+
+        // Check last active project
+        const lastActiveProj = localStorage.getItem('last_active_project_name') || localStorage.getItem('ranktica_active_project');
+        if (lastActiveProj) {
+          projectElement.textContent = lastActiveProj;
+        } else {
+          projectElement.textContent = 'None Detected';
+        }
+      } catch (err) {
+        console.error('Error scanning local offline storage cache:', err);
+      }
+    }
+
+    // Interactive dynamic Connection Prober
+    const btn = document.getElementById('retry-action-btn');
+    const btnText = document.getElementById('btn-text');
+    const btnIcon = document.getElementById('btn-icon');
+    const connIndicatorStatus = document.getElementById('connection-status');
+    const pingerIndicator = document.getElementById('pinger-indicator');
+
+    function updatePhysicalStatus(online) {
+      if (online) {
+        connIndicatorStatus.textContent = 'ONLINE';
+        connIndicatorStatus.className = 'text-xs font-mono text-emerald-400';
+        pingerIndicator.className = 'relative inline-flex rounded-full h-2 w-2 bg-emerald-500';
+        pingerIndicator.parentElement.querySelector('.animate-ping').className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75';
+        btnText.textContent = 'Connection Acquired! Redirecting...';
+        btn.className = 'w-full bg-emerald-600 text-white font-medium text-sm py-2.5 px-4 rounded-xl flex items-center justify-center space-x-2';
+        
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      } else {
+        connIndicatorStatus.textContent = 'OFFLINE MODE';
+        connIndicatorStatus.className = 'text-xs font-mono text-zinc-400';
+        pingerIndicator.className = 'relative inline-flex rounded-full h-2 w-2 bg-amber-500';
+        pingerIndicator.parentElement.querySelector('.animate-ping').className = 'animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75';
+      }
+    }
+
+    btn.addEventListener('click', () => {
+      btnText.textContent = 'Querying Network Connection...';
+      btnIcon.classList.add('animate-spin');
+      btn.disabled = true;
+
+      // Make a prompt network check using general ping
+      setTimeout(() => {
+        const isOnline = navigator.onLine;
+        updatePhysicalStatus(isOnline);
+        btnIcon.classList.remove('animate-spin');
+        btn.disabled = false;
+        
+        if (!isOnline) {
+          btnText.textContent = 'Connection Not Acquired';
+          setTimeout(() => {
+            btnText.textContent = 'Check Connection';
+          }, 2000);
+        }
+      }, 750);
+    });
+
+    window.addEventListener('online', () => updatePhysicalStatus(true));
+    window.addEventListener('offline', () => updatePhysicalStatus(false));
+
+    // Initialize stats
+    readLocalStorageStats();
+    updatePhysicalStatus(navigator.onLine);
+  </script>
+</body>
+</html>

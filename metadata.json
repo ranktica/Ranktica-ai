@@ -1,0 +1,12 @@
+{
+  "name": "Ranktica AI",
+  "description": "A comprehensive YouTube automation suite powered by Gemini and Veo. Generate viral ideas, write full scripts, synthesize high-fidelity AI video, optimize SEO, and create thumbnails in one place.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
