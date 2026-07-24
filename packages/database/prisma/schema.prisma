@@ -1,0 +1,468 @@
+// Ranktica AI - PostgreSQL Schema
+// Multi-tenant SaaS with event-driven architecture
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// MULTI-TENANCY & AUTH
+// ============================================
+
+model Organization {
+  id                String   @id @default(uuid())
+  name              String   @unique
+  slug              String   @unique
+  description       String?
+  logo              String?
+  website           String?
+  subscriptionTier  String   @default("free")
+  status            String   @default("active")
+  monthlyTokenLimit Int      @default(100000)
+  monthlyTokenUsed  Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  users             User[]
+  projects          Project[]
+  campaigns         Campaign[]
+  agents            Agent[]
+  prompts           Prompt[]
+  analytics         Analytics[]
+  billing           Billing?
+  apiKeys           ApiKey[]
+  auditLogs         AuditLog[]
+
+  @@index([slug])
+  @@index([status])
+}
+
+model User {
+  id                String   @id @default(uuid())
+  email             String   @unique
+  name              String
+  avatar            String?
+  firebaseUid       String?  @unique
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  role              String   @default("member")
+  status            String   @default("active")
+  emailVerified     Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  projects          Project[]
+  campaigns         Campaign[]
+  auditLogs         AuditLog[]
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+// ============================================
+// PROJECTS & CONTENT
+// ============================================
+
+model Project {
+  id                String   @id @default(uuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId            String
+  owner             User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title             String
+  description       String?
+  niche             String
+  audience          String
+  status            String   @default("idea")
+  platform          String
+  archived          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  videos            Video[]
+  campaigns         Campaign[]
+  assets            StorageAsset[]
+  prompts           Prompt[]
+  agentRuns         AgentRun[]
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([status])
+}
+
+model Video {
+  id                String   @id @default(uuid())
+  projectId         String
+  project           Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title             String
+  script            String   @db.Text
+  hooks             String[]
+  ctrPrediction     Float?
+  retentionScore    Float?
+  seoKeywords       String[]
+  status            String   @default("draft")
+  duration          Int?
+  thumbnailUrl      String?
+  videoUrl          String?
+  publishedAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  metrics           VideoMetrics?
+  analytics         Analytics[]
+  comments          VideoComment[]
+  assets            StorageAsset[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+model VideoMetrics {
+  id                String   @id @default(uuid())
+  videoId           String   @unique
+  video             Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  views             Int      @default(0)
+  clicks            Int      @default(0)
+  engagementRate    Float    @default(0.0)
+  shareCount        Int      @default(0)
+  avgWatchTime      Int      @default(0)
+  retentionCurve    String?  @db.Text
+  updatedAt         DateTime @updatedAt
+
+  @@index([videoId])
+}
+
+model Campaign {
+  id                String   @id @default(uuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId         String
+  project           Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId            String
+  owner             User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  strategy          String   @db.Text
+  targetMetrics     String   @db.Text
+  status            String   @default("planning")
+  startDate         DateTime?
+  endDate           DateTime?
+  budget            Float?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  videos            Video[]
+  agentRuns         AgentRun[]
+  learnings         CampaignLearning[]
+  results           CampaignResult[]
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model CampaignLearning {
+  id                String   @id @default(uuid())
+  campaignId        String
+  campaign          Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  keyTakeaways      String   @db.Text
+  optimizedPrompt   String   @db.Text
+  successIndicators String   @db.Text
+  createdAt         DateTime @default(now())
+
+  @@index([campaignId])
+}
+
+model CampaignResult {
+  id                String   @id @default(uuid())
+  campaignId        String
+  campaign          Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  metricName        String
+  currentValue      Float
+  targetValue       Float
+  margin            Float
+  timestamp         DateTime @default(now())
+
+  @@index([campaignId])
+}
+
+// ============================================
+// AGENTS & AI ORCHESTRATION
+// ============================================
+
+model Agent {
+  id                String   @id @default(uuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name              String
+  type              String
+  purpose           String   @db.Text
+  systemPrompt      String   @db.Text
+  model             String   @default("gemini-2.5-flash")
+  status            String   @default("idle")
+  tools             String[]
+  memory            String   @db.Text
+  metrics           String   @db.Text
+  maxRetries        Int      @default(3)
+  timeout           Int      @default(300)
+  enabled           Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  deletedAt         DateTime?
+
+  runs              AgentRun[]
+
+  @@index([organizationId])
+  @@index([type])
+}
+
+model AgentRun {
+  id                String   @id @default(uuid())
+  agentId           String
+  agent             Agent @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  projectId         String
+  project           Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  campaignId        String?
+  campaign          Campaign? @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  input             String   @db.Text
+  output            String   @db.Text
+  status            String   @default("pending")
+  error             String?
+  tokensUsed        Int      @default(0)
+  executionTimeMs   Int      @default(0)
+  completedAt       DateTime?
+  createdAt         DateTime @default(now())
+
+  memories          Memory[]
+
+  @@index([agentId])
+  @@index([projectId])
+  @@index([status])
+}
+
+model Memory {
+  id                String   @id @default(uuid())
+  agentId           String
+  agent             Agent @relation("MemoryToAgent", fields: [agentId], references: [id], onDelete: Cascade)
+  agentRunId        String
+  agentRun          AgentRun @relation(fields: [agentRunId], references: [id], onDelete: Cascade)
+  type              String
+  content           String   @db.Text
+  importance        Int      @default(1)
+  relevance         Float    @default(0.0)
+  expiresAt         DateTime?
+  createdAt         DateTime @default(now())
+
+  @@index([agentId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model Prompt {
+  id                String   @id @default(uuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId         String?
+  project           Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  name              String
+  category          String
+  template          String   @db.Text
+  variables         String   @db.Text
+  version           Int      @default(1)
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([organizationId])
+  @@index([category])
+}
+
+// ============================================
+// ANALYTICS & METRICS
+// ============================================
+
+model Analytics {
+  id                String   @id @default(uuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projectId         String?
+  project           Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  videoId           String?
+  video             Video? @relation(fields: [videoId], references: [id], onDelete: SetNull)
+  metricType        String
+  value             Float
+  timestamp         DateTime @default(now())
+  metadata          String?  @db.Text
+
+  @@index([organizationId])
+  @@index([projectId])
+  @@index([videoId])
+  @@index([metricType])
+  @@index([timestamp])
+}
+
+model VideoComment {
+  id                String   @id @default(uuid())
+  videoId           String
+  video             Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  platform          String
+  author            String
+  content           String   @db.Text
+  sentiment         String
+  createdAt         DateTime @default(now())
+
+  @@index([videoId])
+  @@index([platform])
+}
+
+// ============================================
+// STORAGE & ASSETS
+// ============================================
+
+model StorageAsset {
+  id                String   @id @default(uuid())
+  organizationId    String?
+  projectId         String?
+  project           Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  videoId           String?
+  video             Video? @relation(fields: [videoId], references: [id], onDelete: SetNull)
+  name              String
+  category          String
+  mimeType          String
+  fileSize          Int
+  storageUrl        String   @unique
+  provider          String   @default("aws-s3")
+  metadata          String?  @db.Text
+  createdAt         DateTime @default(now())
+
+  @@index([projectId])
+  @@index([category])
+}
+
+// ============================================
+// BILLING & SUBSCRIPTIONS
+// ============================================
+
+model Billing {
+  id                String   @id @default(uuid())
+  organizationId    String   @unique
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planName          String
+  price             Float
+  currency          String   @default("USD")
+  status            String   @default("active")
+  paymentMethod     String?
+  nextBillingDate   DateTime?
+  autoRenew         Boolean  @default(true)
+  trialEndDate      DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  payments          Payment[]
+  invoices          Invoice[]
+  subscriptions     Subscription[]
+
+  @@index([organizationId])
+}
+
+model Subscription {
+  id                String   @id @default(uuid())
+  billingId         String
+  billing           Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
+  stripeId          String?  @unique
+  planId            String
+  status            String   @default("active")
+  currentPeriodStart DateTime
+  currentPeriodEnd  DateTime
+  cancelledAt       DateTime?
+  createdAt         DateTime @default(now())
+
+  @@index([billingId])
+}
+
+model Payment {
+  id                String   @id @default(uuid())
+  billingId         String
+  billing           Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
+  stripeId          String?  @unique
+  amount            Float
+  currency          String   @default("USD")
+  status            String   @default("pending")
+  paymentMethod     String
+  receipt           String?
+  paidAt            DateTime?
+  createdAt         DateTime @default(now())
+
+  @@index([billingId])
+  @@index([status])
+}
+
+model Invoice {
+  id                String   @id @default(uuid())
+  billingId         String
+  billing           Billing @relation(fields: [billingId], references: [id], onDelete: Cascade)
+  invoiceNumber     String   @unique
+  stripeId          String?  @unique
+  amount            Float
+  currency          String   @default("USD")
+  status            String   @default("open")
+  description       String?
+  issuedAt          DateTime @default(now())
+  dueDate           DateTime?
+  paidAt            DateTime?
+  pdfUrl            String?
+  createdAt         DateTime @default(now())
+
+  @@index([billingId])
+  @@index([status])
+}
+
+// ============================================
+// SECURITY & AUDIT
+// ============================================
+
+model AuditLog {
+  id                String   @id @default(uuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action            String
+  resourceType      String
+  resourceId        String
+  changes           String?  @db.Text
+  ipAddress         String
+  userAgent         String?
+  status            String   @default("success")
+  createdAt         DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+model ApiKey {
+  id                String   @id @default(uuid())
+  organizationId    String
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  name              String
+  key               String   @unique
+  secret            String   @unique
+  lastUsedAt        DateTime?
+  expiresAt         DateTime?
+  createdAt         DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([key])
+}
